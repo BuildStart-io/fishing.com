@@ -168,7 +168,7 @@ serve(async (req) => {
     }
 
     // Build FAQ context with IDs so AI can report which ones it used
-    const faqContext = faqs.map(f => 
+    const faqContext = faqs.map(f =>
       `[FAQ_ID:${f.id}] Q: ${f.question}\nA: ${f.answer}${f.products?.name ? ` (Related to: ${f.products.name})` : ""}`
     ).join("\n\n");
 
@@ -179,11 +179,19 @@ serve(async (req) => {
       .map(msg => `${msg.direction === "inbound" ? "Customer" : "Assistant"}: ${msg.message}`)
       .join("\n");
 
-const systemPrompt = `You are an intelligent WhatsApp chatbot assistant for a business. You help customers with:
-1. Product inquiries
-2. Answering FAQs
-3. Taking orders
-4. Providing payment information
+    const systemPrompt = `You are an intelligent WhatsApp chatbot assistant for a fishing gear & rod business. Follow this standard chat flow:
+
+General CHAT FLOW:
+Step 1 - Welcome & Language Detection: Detect Sinhala, English, or Tamil from the initial text or voice message, send a welcome greeting, and lock in that language for the rest of the chat.
+Step 2 - Package Introduction: Introduce the available combo kits and individual rods (up to 10 catalog items) and explain what is included in each package.
+Step 3 - Physical Details: Share approved photographs, full/collapsed height measurements, and mobility details (like foldability or travel cases) when a customer asks about a specific rod.
+Step 4 - Pricing Disclosure: State the exact selling prices for the selected items and explain any approved bundle savings.
+Step 5 - Delivery Information: Confirm that All-Island Delivery is available and explain the delivery charges and estimated timelines.
+Step 6 - Payment Methods: Explain Cash on Delivery (COD) and Bank Transfer options. If they choose Bank Transfer, provide the account details and accept a photo of the payment slip for manual staff confirmation.
+Step 7 - Lead Qualification: Ask targeted questions to filter genuine leads: ask for their selected package, purchase readiness, payment preference, and mandate the collection of their full location.
+Step 8 - Data Collection: Gather the customer's full name, WhatsApp number, complete delivery address, and order specifics. The bot must avoid repeating questions the user has already answered.
+Step 9 - Summary & Handover: Send a final order summary that prominently displays the customer's location, log them as a "Qualified Lead" in the BuildStart dashboard, and route the conversation to human staff for processing.
+Step 10 - Automated Follow-Up: Send scheduled re-engagement messages to users who stop responding before completing the data collection flow.
 
 IMPORTANT GUIDELINES:
 - Respond in the SAME LANGUAGE the customer uses. Auto-detect their language.
@@ -213,20 +221,20 @@ ${freeDeliveryThreshold > 0 ? `   - FREE DELIVERY THRESHOLD: If the order subtot
 - Sub-variants marked as REQUIRED must be selected by the customer before confirming an order. Always ask for required sub-variants if the customer hasn't specified them.
 - For payment, provide ALL configured payment account details to the customer. List every account with emoji separators:
 ${(() => {
-  const accounts = paymentInfo.accounts;
-  if (accounts && Array.isArray(accounts) && accounts.length > 0) {
-    return accounts.map((a: any, i: number) => {
-      const type = a.account_type || "bank";
-      const label = a.account_label || a.bank_name || "Not configured";
-      const number = a.account_number || "Not configured";
-      const name = a.account_name || "Not configured";
-      if (type === "crypto") return `  ${i + 1}. Crypto/Wallet: ${label}, Address/ID: ${number}, Name: ${name}`;
-      if (type === "digital") return `  ${i + 1}. Digital Wallet: ${label}, Account: ${number}, Name: ${name}`;
-      return `  ${i + 1}. Bank: ${label}, Account: ${number}, Name: ${name}`;
-    }).join("\n");
-  }
-  return `  Bank: ${paymentInfo.bank_name || "Not configured"}, Account: ${paymentInfo.account_number || "Not configured"}, Name: ${paymentInfo.account_name || "Not configured"}`;
-})()}
+        const accounts = paymentInfo.accounts;
+        if (accounts && Array.isArray(accounts) && accounts.length > 0) {
+          return accounts.map((a: any, i: number) => {
+            const type = a.account_type || "bank";
+            const label = a.account_label || a.bank_name || "Not configured";
+            const number = a.account_number || "Not configured";
+            const name = a.account_name || "Not configured";
+            if (type === "crypto") return `  ${i + 1}. Crypto/Wallet: ${label}, Address/ID: ${number}, Name: ${name}`;
+            if (type === "digital") return `  ${i + 1}. Digital Wallet: ${label}, Account: ${number}, Name: ${name}`;
+            return `  ${i + 1}. Bank: ${label}, Account: ${number}, Name: ${name}`;
+          }).join("\n");
+        }
+        return `  Bank: ${paymentInfo.bank_name || "Not configured"}, Account: ${paymentInfo.account_number || "Not configured"}, Name: ${paymentInfo.account_name || "Not configured"}`;
+      })()}
 - STRICT DATA BOUNDARY: You must ONLY use the product catalog, FAQs, and payment information provided below. Do NOT make up products, prices, features, or answers that are not explicitly listed. If a customer asks about something not covered, politely say you don't have that information and suggest they contact the business directly.
 
 PRODUCT IMAGES:
@@ -360,7 +368,7 @@ CRITICAL SECURITY RULE:
     if (usedFaqsMatch && trackedFaqIds.length > 0) {
       const usedIds = usedFaqIds;
       const trackedUsedIds = usedIds.filter((id: string) => trackedFaqIds.includes(id));
-      
+
       if (trackedUsedIds.length > 0) {
         console.log(`Tracked FAQs used: ${trackedUsedIds.join(", ")} for phone ${phoneNumber}`);
         const usageLogs = trackedUsedIds.map((faqId: string) => ({
