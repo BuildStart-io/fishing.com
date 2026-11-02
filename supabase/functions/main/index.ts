@@ -18,7 +18,13 @@ serve(async (req: Request) => {
     try {
       await Deno.stat(servicePath);
     } catch {
-      if (functionName.endsWith('_fishing')) {
+      if (functionName.endsWith('_fishing_V2')) {
+        const base = functionName.replace(/_fishing_V2$/, '');
+        try {
+          await Deno.stat(`/home/deno/functions/${base}`);
+          servicePath = `/home/deno/functions/${base}`;
+        } catch {}
+      } else if (functionName.endsWith('_fishing')) {
         const base = functionName.replace(/_fishing$/, '');
         try {
           await Deno.stat(`/home/deno/functions/${base}`);
