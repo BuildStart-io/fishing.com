@@ -21,16 +21,10 @@ serve(async (req: Request) => {
       if (functionName.endsWith('_fishing_V2')) {
         const base = functionName.replace(/_fishing_V2$/, '');
         try {
-          await Deno.stat(`/home/deno/functions/${base}`);
-          servicePath = `/home/deno/functions/${base}`;
+          await Deno.stat(`/home/deno/functions/${base}_fishing`);
+          servicePath = `/home/deno/functions/${base}_fishing`;
         } catch {}
-      } else if (functionName.endsWith('_fishing')) {
-        const base = functionName.replace(/_fishing$/, '');
-        try {
-          await Deno.stat(`/home/deno/functions/${base}`);
-          servicePath = `/home/deno/functions/${base}`;
-        } catch {}
-      } else {
+      } else if (!functionName.endsWith('_fishing')) {
         try {
           await Deno.stat(`/home/deno/functions/${functionName}_fishing`);
           servicePath = `/home/deno/functions/${functionName}_fishing`;
