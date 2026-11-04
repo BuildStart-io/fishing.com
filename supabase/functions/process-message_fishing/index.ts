@@ -156,17 +156,20 @@ async function processMessage(
     isVoice = true;
   }
 
-  // Check if this is a media message — if so, store it but do NOT reply
-  const mediaTypes = ["image", "video", "document", "sticker", "vcard", "location"];
-  let isMediaMessage = mediaTypes.includes(messageType) || 
-    (!messageText && messageType !== "text" && !isVoice) ||
-    (body?.data?.messages?.messageBody === undefined && body?.data?.messages?.message?.conversation === undefined && !isVoice && !messageText);
+  // Check for unhandled media to skip (stickers, vcards, locations, videos)
+  const unhandledMediaTypes = ["video", "sticker", "vcard", "location"];
+  const isUnhandledMedia = unhandledMediaTypes.includes(messageType) || 
+    (!messageText && messageType !== "text" && messageType !== "image" && messageType !== "document" && !isVoice);
+
+  const displayMessage = isVoice
+    ? "🎤 [Voice Note: Transcribing...]"
+    : (messageText || (messageType === "image" ? "📷 [Image]" : messageType === "document" ? "📄 [Document]" : ""));
 
   // 1. Store the incoming message in conversations
   mark("store_inbound_start");
   const { data: inboundMsg, error: insertError } = await supabase.from("conversations").insert({
     phone_number: phoneNumber,
-    message: isVoice ? "🎤 [Voice Note: Transcribing...]" : messageText,
+    message: displayMessage,
     direction: "inbound",
     message_type: messageType,
     metadata: { senderName, event: body?.event, raw: body, correlationId: corrId, is_voice: isVoice },
@@ -224,10 +227,15 @@ async function processMessage(
   );
 
 
-  // Skip replying to media messages (images, PDFs, videos, etc.)
-  if (isMediaMessage) {
-    console.log(`[${corrId}] Media message (type: ${messageType}) from ${phoneNumber}, stored but not replying`);
+  // Skip replying to unhandled media (stickers, locations, videos, etc.)
+  if (isUnhandledMedia) {
+    console.log(`[${corrId}] Unhandled media message (type: ${messageType}) from ${phoneNumber}, stored but not replying`);
     return;
+  }
+
+  // If customer sent an image/document without a text caption, provide context text for AI
+  if (!messageText && (messageType === "image" || messageType === "document")) {
+    messageText = "[Customer sent an image/receipt]";
   }
 
   // 2. Check if auto-responses are enabled
