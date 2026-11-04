@@ -27,7 +27,10 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const dbSchema = Deno.env.get("DB_SCHEMA") || "fishing";
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      db: { schema: dbSchema },
+    });
 
     const { message, phoneNumber, conversationHistory, userId, sessionApiKey, senderName } = await req.json();
 

@@ -14,7 +14,10 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const dbSchema = Deno.env.get("DB_SCHEMA") || "fishing";
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    db: { schema: dbSchema },
+  });
 
   let triggerSource = "cron";
   let triggerCorrelationId = "";
@@ -487,10 +490,12 @@ async function handleWelcomeMessage(
     }));
     await supabase.from("conversations").insert(historyInserts);
     console.log(`[${corrId}] Stored ${sentTexts.length} welcome message(s) in conversation history`);
+    console.log(`[${corrId}] Welcome message sent, skipping AI for first message`);
+    return true;
   }
 
-  console.log(`[${corrId}] Welcome message sent, skipping AI for first message`);
-  return true;
+  console.log(`[${corrId}] No welcome message sent, proceeding to AI`);
+  return false;
 }
 
 async function sendWhatsApp(
