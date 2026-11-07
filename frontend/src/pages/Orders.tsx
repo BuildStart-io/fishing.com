@@ -81,6 +81,25 @@ export default function Orders() {
 
   useEffect(() => {
     fetchOrders();
+
+    const channel = supabase
+      .channel("orders-realtime-feed")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "fishing",
+          table: "orders",
+        },
+        () => {
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [statusFilter]);
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
