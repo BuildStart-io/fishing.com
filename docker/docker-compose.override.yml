@@ -19,7 +19,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_REGION: ${MINIO_REGION}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-      WEBHOOK_URL_OVERRIDE: "https://responses-contribute-knows-ipod.trycloudflare.com/functions/v1/webhook-wsender_fishing"
+      WEBHOOK_URL_OVERRIDE: "https://cia-leaf-log-supporting.trycloudflare.com/functions/v1/webhook-wsender_fishing"
       DB_SCHEMA: "fishing"
 
   minio:
