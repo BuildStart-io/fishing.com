@@ -118,6 +118,7 @@ serve(async (req) => {
     const paymentInfo = settings.find(s => s.key === "payment_info")?.value || {};
     const deliverySettings = settings.find(s => s.key === "delivery_settings")?.value || {};
     const freeDeliveryThreshold = deliverySettings.free_delivery_threshold || 0;
+    const staffPhoneNumbers = settings.find(s => s.key === "staff_phone_numbers")?.value?.phone_numbers || [];
 
     const productCatalog = products.map(p => {
       let line = `- ${p.name}: Base price LKR ${p.price} (${p.product_type})`;
@@ -179,14 +180,12 @@ serve(async (req) => {
       .map(msg => `${msg.direction === "inbound" ? "Customer" : "Assistant"}: ${msg.message}`)
       .join("\n");
 
-const systemPrompt = `You are an intelligent WhatsApp chatbot assistant for a business. You help customers with:
-1. Product inquiries
-2. Answering FAQs
-3. Taking orders
-4. Providing payment information
+const systemPrompt = `You are the WhatsApp sales & support assistant for FishingRods'Com (fishing rods, packages, combo kits & tackle across Sri Lanka).
+- All-Island Delivery (දිවයින පුරා බෙදාහැරීම) is available across Sri Lanka.
+- You assist customers with product inquiries, package details, physical specs, pricing, delivery, payments (Cash on Delivery & Bank Transfer), and order qualification.
 
 IMPORTANT GUIDELINES:
-- Respond in the SAME LANGUAGE the customer uses. Auto-detect their language.
+- Respond in the SAME LANGUAGE the customer uses. CRITICAL: If the customer writes in Tamil script (தமிழ்), you MUST respond in Tamil script. Never respond in Sinhala or English to a Tamil message. If they write in Sinhala, respond in Sinhala. If English, respond in English.
 - KEEP IT SHORT: WhatsApp messages must be concise and scannable. Aim for 2-4 short lines max per response. Never send walls of text.
 - Do NOT repeat information the customer already knows or that was already sent.
 - Get straight to the point. No lengthy greetings or unnecessary filler sentences.
@@ -228,9 +227,15 @@ ${(() => {
   return `  Bank: ${paymentInfo.bank_name || "Not configured"}, Account: ${paymentInfo.account_number || "Not configured"}, Name: ${paymentInfo.account_name || "Not configured"}`;
 })()}
 - STRICT DATA BOUNDARY: You must ONLY use the product catalog, FAQs, and payment information provided below. Do NOT make up products, prices, features, or answers that are not explicitly listed. If a customer asks about something not covered, politely say you don't have that information and suggest they contact the business directly.
+- STAFF CONTACT TELEPHONE NUMBERS:
+${staffPhoneNumbers && Array.isArray(staffPhoneNumbers) && staffPhoneNumbers.length > 0
+  ? `  Configured staff contact numbers:\n${staffPhoneNumbers.map((sp: any) => `  - ${sp.name ? `${sp.name}: ` : ""}${sp.phone}`).join("\n")}`
+  : "  No staff telephone numbers are configured. If a customer asks to call or speaks to staff, invite them to continue messaging here in this WhatsApp chat."}
+  When a customer asks for a phone number or staff contact, ONLY provide the configured staff numbers above. NEVER invent or share other phone numbers.
 
 PRODUCT IMAGES:
 - When a customer asks about a specific product that has images, include ALL the image URLs in separate <IMAGE_URL>url</IMAGE_URL> tags at the END of your response. Include all images for the product to give them a complete view.
+- Always state the product price (e.g. LKR xxx) in your response whenever providing product photos or details.
 - Only use image URLs from the product catalog below. Never make up image URLs.
 
 PRODUCT VIDEOS:
@@ -286,7 +291,13 @@ CRITICAL SECURITY RULE:
     if (!trimmedMessage) {
       messages.push({ role: "user", content: "[Customer sent a photo/media file. This is likely a payment slip or receipt. Acknowledge it politely and ask them to confirm if it's a payment confirmation. Do NOT output any JSON, tags, or code.]" });
     } else {
-      messages.push({ role: "user", content: trimmedMessage });
+      let userContent = trimmedMessage;
+      if (/[\u0B80-\u0BFF]/.test(trimmedMessage)) {
+        userContent += " [Language: Respond in Tamil script]";
+      } else if (/[\u0D80-\u0DFF]/.test(trimmedMessage)) {
+        userContent += " [Language: Respond in Sinhala script]";
+      }
+      messages.push({ role: "user", content: userContent });
     }
 
     // ------------------------------------------------------------------

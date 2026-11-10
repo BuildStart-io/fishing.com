@@ -152,7 +152,7 @@ async function processMessage(
   let { user_id: userId, phone_number: phoneNumber, sender_name: senderName, message_text: messageText, message_type: messageType, session_api_key: sessionApiKey, raw_payload: body, wsender_message_id: wahaMessageId } = msg;
 
   let isVoice = false;
-  if (messageType === "ptt" || messageType === "audio") {
+  if (messageType === "ptt" || messageType === "audio" || messageType === "voice") {
     isVoice = true;
   }
 
@@ -181,7 +181,8 @@ async function processMessage(
   if (isVoice) {
     console.log(`[${corrId}] Detected voice message, attempting transcription...`);
     const mediaUrl = body?.payload?.media?.url || body?.media?.url;
-    const transcription = await transcribeAudio(sessionApiKey, wahaMessageId, mediaUrl);
+    const mediaMimeType = body?.payload?.media?.mimetype || body?.media?.mimetype || undefined;
+    const transcription = await transcribeAudio(sessionApiKey, wahaMessageId, mediaUrl, mediaMimeType);
     if (transcription) {
       messageText = transcription;
       if (inboundMsg?.id) {

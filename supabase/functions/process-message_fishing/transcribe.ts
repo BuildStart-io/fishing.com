@@ -6,7 +6,34 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export async function transcribeAudio(sessionName: string, wahaMessageId: string, mediaUrl?: string): Promise<string | null> {
+function resolveWahaUrl(rawUrl: string | undefined, wahaBase: string, sessionName: string, wahaMessageId: string): string {
+  if (!rawUrl) {
+    return `${wahaBase}/api/${encodeURIComponent(sessionName)}/messages/${encodeURIComponent(wahaMessageId)}/download`;
+  }
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith("/")) {
+    return `${wahaBase}${trimmed}`;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      const baseParsed = new URL(wahaBase);
+      parsed.protocol = baseParsed.protocol;
+      parsed.host = baseParsed.host;
+      return parsed.toString();
+    }
+  } catch {
+    // fallback to original trimmed url
+  }
+  return trimmed;
+}
+
+export async function transcribeAudio(
+  sessionName: string,
+  wahaMessageId: string,
+  mediaUrl?: string,
+  mimeTypeHint?: string
+): Promise<string | null> {
   const WAHA_BASE = (Deno.env.get("WAHA_BASE_URL") || "").replace(/\/+$/, "");
   const WAHA_KEY = Deno.env.get("WAHA_API_KEY") || "";
   const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY") || "";
@@ -18,8 +45,10 @@ export async function transcribeAudio(sessionName: string, wahaMessageId: string
 
   // 1. Download WAHA Audio
   let audioBuffer: Uint8Array;
+  let detectedMime = mimeTypeHint || "audio/ogg";
+
   try {
-    const wahaUrl = mediaUrl || `${WAHA_BASE}/api/${encodeURIComponent(sessionName)}/messages/${encodeURIComponent(wahaMessageId)}/download`;
+    const wahaUrl = resolveWahaUrl(mediaUrl, WAHA_BASE, sessionName, wahaMessageId);
     console.log(`Downloading audio from: ${wahaUrl}`);
     const res = await fetch(wahaUrl, {
       headers: { "X-Api-Key": WAHA_KEY, "Accept": "*/*" },
@@ -31,8 +60,13 @@ export async function transcribeAudio(sessionName: string, wahaMessageId: string
       return null;
     }
 
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.toLowerCase().includes("audio/")) {
+      detectedMime = contentType.split(";")[0].trim();
+    }
+
     audioBuffer = new Uint8Array(await res.arrayBuffer());
-    console.log(`Downloaded ${audioBuffer.length} bytes of audio data`);
+    console.log(`Downloaded ${audioBuffer.length} bytes of audio data (${detectedMime})`);
   } catch (err) {
     console.error("Error downloading audio from WAHA:", err);
     return null;
@@ -63,7 +97,7 @@ export async function transcribeAudio(sessionName: string, wahaMessageId: string
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:audio/ogg;base64,${base64Audio}`
+                  url: `data:${detectedMime};base64,${base64Audio}`
                 }
               }
             ]

@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save, MessageSquare, CreditCard, Copy, Check, Smartphone, RefreshCw, Wifi, WifiOff, Plus, Trash2, ArrowUp, ArrowDown, GripVertical, Clock, Lock, X } from "lucide-react";
 import WelcomeMediaUpload from "@/components/settings/WelcomeMediaUpload";
 import StaffManager from "@/components/settings/StaffManager";
+import StaffPhoneNumbersCard, { StaffPhoneNumber } from "@/components/settings/StaffPhoneNumbersCard";
 import { useStaffAccess } from "@/hooks/useStaffAccess";
 import { useEffectivePlan } from "@/hooks/useEffectivePlan";
 
@@ -86,6 +87,9 @@ export default function Settings() {
   const [inactivityFollowupMessage, setInactivityFollowupMessage] = useState("");
   const [inactivityFollowupHours, setInactivityFollowupHours] = useState<string>("24");
   const [inactivityFollowupEnabledAt, setInactivityFollowupEnabledAt] = useState<string | null>(null);
+
+  // Staff Phone Numbers (Accessible across all plans)
+  const [staffPhoneNumbers, setStaffPhoneNumbers] = useState<StaffPhoneNumber[]>([]);
 
   // WhatsApp Connection
   const [sessions, setSessions] = useState<WsenderSession[]>([]);
@@ -187,6 +191,13 @@ export default function Settings() {
             setInactivityFollowupEnabled(iVal?.enabled ?? false);
             setInactivityFollowupHours(String(iVal?.hours ?? 24));
             setInactivityFollowupEnabledAt(iVal?.enabled_at || null);
+            break;
+          }
+          case "staff_phone_numbers": {
+            const sVal = setting.value as any;
+            if (sVal?.phone_numbers && Array.isArray(sVal.phone_numbers)) {
+              setStaffPhoneNumbers(sVal.phone_numbers);
+            }
             break;
           }
         }
@@ -597,6 +608,11 @@ export default function Settings() {
       hours,
       enabled_at: enabledAt,
     });
+  };
+
+  const handleSaveStaffPhoneNumbers = () => {
+    const valid = staffPhoneNumbers.filter(s => s.phone.trim());
+    saveSettings("staff_phone_numbers", { phone_numbers: valid });
   };
 
   const copyWebhookUrl = async () => {
@@ -1383,6 +1399,12 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="staff" className="space-y-6">
+            <StaffPhoneNumbersCard
+              numbers={staffPhoneNumbers}
+              onChange={setStaffPhoneNumbers}
+              onSave={handleSaveStaffPhoneNumbers}
+              saving={saving}
+            />
             <StaffManager />
           </TabsContent>
 

@@ -12,7 +12,7 @@
 
 const { execSync } = require("child_process");
 
-const EDGE_FUNCTION_URL = "http://localhost:8000/functions/v1/ai-chat-ibbagamuwa";
+const EDGE_FUNCTION_URL = "http://localhost:8000/functions/v1/ai-chat_fishing";
 const SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3OTM2MjQ0NTAsImV4cCI6MjEwODk4NDQ1MH0.3NSKKo_lwbQZHiQEfmH_WIzO-acB0Y0hEQErOB9yDWs";
 const USER_ID = "8ec761ff-b716-411b-85d2-1b56980d1e8a";
 const PHONE_NUMBER = "94706996683";
