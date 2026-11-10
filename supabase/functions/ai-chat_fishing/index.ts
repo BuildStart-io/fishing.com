@@ -115,6 +115,8 @@ serve(async (req) => {
     const settings = settingsRes.data || [];
 
     const welcomeMessage = settings.find(s => s.key === "welcome_message")?.value?.text || "Welcome! How can I help you?";
+    const businessNameSetting = settings.find(s => s.key === "business_name")?.value;
+    const businessName = (typeof businessNameSetting === "string" ? businessNameSetting : businessNameSetting?.text || businessNameSetting?.name) || "FishingRods'Com";
     const paymentInfo = settings.find(s => s.key === "payment_info")?.value || {};
     const deliverySettings = settings.find(s => s.key === "delivery_settings")?.value || {};
     const freeDeliveryThreshold = deliverySettings.free_delivery_threshold || 0;
@@ -180,7 +182,7 @@ serve(async (req) => {
       .map(msg => `${msg.direction === "inbound" ? "Customer" : "Assistant"}: ${msg.message}`)
       .join("\n");
 
-const systemPrompt = `You are the WhatsApp sales & support assistant for FishingRods'Com (fishing rods, packages, combo kits & tackle across Sri Lanka).
+const systemPrompt = `You are the WhatsApp sales & support assistant for ${businessName} (fishing rods, packages, combo kits & tackle across Sri Lanka).
 - All-Island Delivery (දිවයින පුරා බෙදාහැරීම) is available across Sri Lanka.
 - You assist customers with product inquiries, package details, physical specs, pricing, delivery, payments (Cash on Delivery & Bank Transfer), and order qualification.
 
