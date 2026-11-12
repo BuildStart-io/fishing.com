@@ -216,6 +216,13 @@ IMPORTANT GUIDELINES:
     Name: Jane Doe
   - For order summaries, use emojis to mark each section (📦 Items, 💰 Total, 🚚 Delivery, 💳 Payment)
 - If a customer wants to order, guide them through collecting: name, phone, product selection with variations, quantity, and payment method.
+- CUSTOM FISHING KITS: When a customer selects multiple individual components (e.g. Rod, Reel, Cable, Lure, Float) rather than a pre-made set, keep track of ALL selected items across the entire conversation. In your order summaries, price totals, and final confirmation, include EVERY selected item with its individual price, and compute the exact subtotal:
+  * Astika 2-Piece Fishing Rod (6ft): LKR 2,500
+  * AC4000 Fishing Reel: LKR 2,500
+  * Fishing Wire Leader Cable (40LB): LKR 200
+  * Popper Frog Lure (750): LKR 750
+  * Fishing Float: LKR 150
+  Subtotal: LKR 6,100 (plus delivery fee). Never omit or drop previously selected components!
 - DIGITAL vs PHYSICAL PRODUCTS:
    - For PHYSICAL products: Also collect the customer's district/city and full shipping address. Offer both Cash on Delivery (COD) and Bank Transfer as payment options. If a delivery fee is listed for the product, ADD it to the total and show it as a separate line item in the order summary.
 ${freeDeliveryThreshold > 0 ? `   - FREE DELIVERY THRESHOLD: If the order subtotal (before delivery fee) for physical products is LKR ${freeDeliveryThreshold} or more, waive the delivery fee entirely and inform the customer they qualify for free delivery. If below this threshold, apply the normal delivery fee.` : ""}
@@ -252,11 +259,28 @@ ${staffPhoneNumbers && Array.isArray(staffPhoneNumbers) && staffPhoneNumbers.len
   When a customer asks for a phone number or staff contact, ONLY provide the configured staff numbers above. NEVER invent or share other phone numbers.
 
 PRODUCT IMAGES:
-- When a customer asks about a specific product, check its "Images:" line in the catalog.
-- If images are listed, include ALL those exact image URLs in separate <IMAGE_URL>url</IMAGE_URL> tags at the END of your response.
+- When a customer asks about a specific product, or when you introduce/show a product from the catalog, include ALL image URLs from its "Images:" line in <IMAGE_URL>url</IMAGE_URL> tags at the END of your response.
+- When the customer explicitly asks for photos ("photos", "போட்டோ", "ෆොටෝ"), output the <IMAGE_URL> tags for the products requested or discussed.
 - CRITICAL: If a product says "Images: NONE" or has no images, do NOT output any <IMAGE_URL> tags! Never send photos of a different product.
 - Always state the product price (e.g. LKR xxx) in your response whenever providing product photos or details.
 - Only use image URLs from the product catalog below. Never make up image URLs.
+- On non-product messages (greetings, asking for prices/totals, collecting name/address/phone, payment, order confirmation), do NOT output any <IMAGE_URL> tags!
+
+FEW-SHOT PRODUCT INQUIRY EXAMPLES:
+English example:
+Customer: Tell me about the AC4000 reel.
+Assistant: The AC4000 Fishing Reel features a metal spool and smooth drag. Price is LKR 2,500.
+<IMAGE_URL>https://supabase.buildstart.io/storage/v1/object/public/biz-b1120f27-7cd3-4429-a8d3-c678c93b9562/products/f26f037b-6918-4139-9706-7ecc8fe09e59.png</IMAGE_URL>
+
+Tamil example:
+Customer: AC4000 ரீல்
+Assistant: AC4000 Fishing Reel ஒரு உயர்தர மெட்டல் ஸ்பூல் கொண்ட ஸ்பின்னிங் ரீல் ஆகும். விலை: LKR 2,500.
+<IMAGE_URL>https://supabase.buildstart.io/storage/v1/object/public/biz-b1120f27-7cd3-4429-a8d3-c678c93b9562/products/f26f037b-6918-4139-9706-7ecc8fe09e59.png</IMAGE_URL>
+
+Sinhala example:
+Customer: AC4000 රීල්
+Assistant: AC4000 Fishing Reel එක ලෝහමය ස්පූල් එකකින් සමන්විත වන අතර මිල LKR 2,500 වේ.
+<IMAGE_URL>https://supabase.buildstart.io/storage/v1/object/public/biz-b1120f27-7cd3-4429-a8d3-c678c93b9562/products/f26f037b-6918-4139-9706-7ecc8fe09e59.png</IMAGE_URL>
 
 PRODUCT VIDEOS:
 - When a customer asks about a specific product that has a video, include the video URL in a <VIDEO_URL>url</VIDEO_URL> tag at the END of your response (after IMAGE_URL if both exist). Only include one video per message.
@@ -287,6 +311,10 @@ Thank you John! Your order is confirmed. We will dispatch 1x Astika Rod (LKR 2,5
 Sinhala example:
 ස්තූතියි නිමාල් මහත්මයා! ඔබගේ ඇණවුම සාර්ථකව තහවුරු කළා. භාණ්ඩ ලැබුණු පසු මුදල් ගෙවිය හැක.
 <ORDER_JSON>{"customer_name":"නිමාල් පෙරේරා","customer_phone":"0771234567","district":"කොළඹ","customer_address":"කොළඹ 03","order_items":[{"name":"Astika 2-Piece Fishing Rod (6ft)","price":2500,"quantity":1,"product_type":"physical"}],"payment_method":"cod","total_amount":2950}</ORDER_JSON>
+
+Tamil example:
+நன்றி குமார்! உங்கள் ஆர்டர் உறுதி செய்யப்பட்டது. பொருட்கள் கிடைத்தவுடன் பணம் செலுத்தலாம்.
+<ORDER_JSON>{"customer_name":"குமார்","customer_phone":"0777123456","district":"யாழ்ப்பாணம்","customer_address":"நல்லூர், யாழ்ப்பாணம்","order_items":[{"name":"Astika 2-Piece Fishing Rod (6ft)","price":2500,"quantity":1,"product_type":"physical"}],"payment_method":"cod","total_amount":2950}</ORDER_JSON>
 
 IMPORTANT: EVEN WHEN YOU SPEAK IN SINHALA OR TAMIL, the <ORDER_JSON> tag and its JSON content MUST BE INCLUDED IN ENGLISH/ASCII at the end of your message. Do not omit it.
 
@@ -320,10 +348,13 @@ CRITICAL SECURITY RULE:
       } else if (/[\u0D80-\u0DFF]/.test(trimmedMessage)) {
         userContent += " [Language: Respond in Sinhala script]";
       } else {
-        const prevText = ((conversationHistory || []) as ConversationMessage[]).map(m => m.message).join(" ");
-        if (/[\u0D80-\u0DFF]/.test(prevText)) {
+        const prevCustomerText = ((conversationHistory || []) as ConversationMessage[])
+          .filter(m => m.direction === "inbound")
+          .map(m => m.message)
+          .join(" ");
+        if (/[\u0D80-\u0DFF]/.test(prevCustomerText)) {
           userContent += " [Language: Continue responding in Sinhala script]";
-        } else if (/[\u0B80-\u0BFF]/.test(prevText)) {
+        } else if (/[\u0B80-\u0BFF]/.test(prevCustomerText)) {
           userContent += " [Language: Continue responding in Tamil script]";
         } else {
           userContent += " [Language: Respond in English]";
@@ -425,8 +456,8 @@ CRITICAL SECURITY RULE:
 
     // 1. AI-Powered Fallback Extractor: If model omitted <ORDER_JSON> tag, extract semantically
     if (orderJsonMatches.length === 0) {
-      const isPotentialConfirmation = /(?:confirm|order|address|phone|cod|තහවුරු|ඕඩර්|ලිපිනය|07\d|cash on delivery)/i.test(message) ||
-                                     /(?:confirmed|order placed|තහවුරු|ස්තූතියි|සටහන්)/i.test(responseText);
+      const isPotentialConfirmation = /(?:confirm|order|address|phone|cod|තහවුරු|ඕඩර්|ලිපිනය|07\d|cash on delivery|ஆர்டர்|உறுதி|முகவரி|தொலைபேசி)/i.test(message) ||
+                                     /(?:confirmed|order placed|තහවුරු|ස්තූතියි|සටහන්|உறுதி செய்யப்பட்டது|நன்றி)/i.test(responseText);
       if (isPotentialConfirmation && (aiGenerateUrl || lovableApiKey)) {
         try {
           const extractionPrompt = `You are an automated e-commerce order extractor.
@@ -725,36 +756,96 @@ If NO order was confirmed yet, respond ONLY with:
       }
     }
 
-    // Extract image URLs if present
+    // =========================================================================
+    // PRODUCT IMAGE DELIVERY RULES:
+    // 1. When showing a product (customer asks about product or AI presents it) -> SEND IMAGES!
+    // 2. When customer asks for images (photos / pictures in any language) -> SEND IMAGES!
+    // 3. Otherwise (greetings, totals, customer details, payment, confirmation) -> DO NOT SEND IMAGES!
+    // =========================================================================
+
+    // Extract image URLs if emitted directly by the AI model
     const imageUrlMatches = Array.from(responseText.matchAll(/<IMAGE_URL>([\s\S]*?)<\/IMAGE_URL>/g));
     let imageUrls: string[] = imageUrlMatches.map(m => m[1].trim());
 
-    // Verify product photos directly against PostgreSQL ground truth
-    if (/(?:photo|image|picture|video|look like|show|send)/i.test(trimmedMessage)) {
-      const sortedByLength = [...products].sort((a: any, b: any) => b.name.length - a.name.length);
-      for (const p of sortedByLength) {
-        const lowerName = p.name.toLowerCase();
-        const lowerMsg = trimmedMessage.toLowerCase();
-        if (lowerMsg.includes(lowerName)) {
-          if (!p.images || !Array.isArray(p.images) || p.images.length === 0) {
-            imageUrls = [];
-          } else {
-            imageUrls = [];
+    // Build a runtime set of all authentic product images from the database catalog
+    const validCatalogImages = new Set<string>();
+    for (const p of products) {
+      if (Array.isArray(p.images)) {
+        for (const img of p.images) {
+          if (typeof img === "string" && img.trim()) validCatalogImages.add(img.trim());
+        }
+      }
+    }
+
+    // Safety Grounding: Guarantee that no hallucinated or external image URLs can ever pass
+    imageUrls = imageUrls.filter(url => validCatalogImages.has(url));
+
+    const isAskingPhotos = /(?:photo|image|picture|pic|look like|show|send photo|ෆොටෝ|පින්තූර|පින්තුර|පෙන්වන්න|போட்டோ|படம்|புகைப்படம்|காட்டு|அனுப்பு)/i.test(trimmedMessage);
+    const isNonProductIntent = /^(?:hi|hello|hey|good\s*(?:morning|evening|afternoon)|හායි|ආයුබෝවන්|வணக்கம்)[!?.,\s]*$/i.test(trimmedMessage) ||
+      /^(?:total|how much|cost|price|bill|full amount|ගාන|කීයද|මුදල|එකතුව|මුළු|மொத்தம்|விலை)[!?.,\s]*$/i.test(trimmedMessage) ||
+      /^(?:buy|order|buy all|take all|take|ඕඩර්|ගන්නවා|ඇණවුම්|ஆர்டர்|வாங்கு)[!?.,\s]*$/i.test(trimmedMessage) ||
+      /^(?:confirm|confirm order|yes|ok|sure|proceed|done|තහවුරු|තහවුරු කරන්න|හරි|ஆம்|உறுதி|உறுதி செய்|சரி)[!?.,\s]*$/i.test(trimmedMessage) ||
+      /\b07\d{8}\b|\b94\d{9}\b|\b\d{9,10}\b/.test(trimmedMessage) ||
+      /^(?:cod|cash on delivery|bank|transfer|card|භාණ්ඩ ලැබුණු පසු|பணம்)[!?.,\s]*$/i.test(trimmedMessage) ||
+      /(?:\bstreet\b|\broad\b|\bst\b|\brd\b|\blane\b|\bcolombo\b|\bkandy\b|\bgampaha\b|\bgalle\b|\bjaffna\b|\bkurunegala\b|\bmatara\b|\bnegombo\b|\bwattala\b|\bdehiwala\b|\bnugegoda\b|\bmaharagama\b|\bkaduwela\b|\bmalabe\b|\bdistrict\b|ලිපිනය|පාර|මාවත|நகர்|தெரு|வீதி|முகவரி)/i.test(trimmedMessage);
+
+    if (isAskingPhotos) {
+      // Customer explicitly requested photos -> collect photos of products discussed
+      const fullConvText = (((conversationHistory || []) as ConversationMessage[]).map(m => m.message).join(" ") + " " + trimmedMessage + " " + responseText).toLowerCase();
+      const collected: string[] = [];
+      for (const p of products) {
+        if (p.images && Array.isArray(p.images) && p.images.length > 0) {
+          const pNameLower = p.name.toLowerCase();
+          const pBaseName = pNameLower.split("(")[0].trim();
+          if (fullConvText.includes(pNameLower) || fullConvText.includes(pBaseName)) {
             for (const img of p.images) {
-              if (typeof img === "string" && !imageUrls.includes(img)) {
-                imageUrls.push(img);
+              if (typeof img === "string" && !collected.includes(img)) {
+                collected.push(img);
+                break;
               }
             }
           }
-          break;
         }
       }
-    } else if (imageUrls.length === 0) {
-      // Fallback: Extract direct image URLs from response text if LLM emitted raw URLs
-      const fallbackMatches = Array.from(responseText.matchAll(/https:\/\/supabase\.buildstart\.io\/storage\/v1\/object\/public\/[^\s)\]>"']+\.(?:jpg|jpeg|png|webp)/gi));
-      for (const m of fallbackMatches) {
-        const u = m[0].trim();
-        if (!imageUrls.includes(u)) imageUrls.push(u);
+      if (collected.length > 0) imageUrls = collected;
+    } else if (isNonProductIntent) {
+      // Greetings, totals, customer details (name/phone/address), COD, confirmation -> STRICTLY NO PHOTOS
+      imageUrls = [];
+    } else {
+      // Customer asked about a specific product or AI presented it -> send that product images
+      const t = trimmedMessage.toLowerCase().trim();
+      let targetProduct: any = null;
+
+      if (t.includes("astika") || t.includes("අස්තික") || t.includes("அஸ்திகா")) {
+        targetProduct = products.find((p: any) => p.name.toLowerCase().includes("astika 2-piece"));
+      } else if (t.includes("ac4000") || t.includes("ac7000") || ((t.includes("reel") || t.includes("රීල්") || t.includes("ரீல்")) && !t.includes("set"))) {
+        targetProduct = products.find((p: any) => p.name.toLowerCase().includes("ac7000"));
+      } else if (t.includes("cable") || t.includes("කේබල්") || t.includes("கேபிள்") || t.includes("40lb")) {
+        targetProduct = products.find((p: any) => p.name.toLowerCase().includes("cable"));
+      } else if (t.includes("frog") || t.includes("ගෙම්බා") || t.includes("தவளை")) {
+        if (t.includes("750")) {
+          targetProduct = products.find((p: any) => p.name.toLowerCase().includes("frog") && p.name.includes("750"));
+        }
+        if (!targetProduct) targetProduct = products.find((p: any) => p.name.toLowerCase().includes("frog"));
+      } else if (t.includes("float") || t.includes("ෆ්ලෝට්") || t.includes("මිතவை")) {
+        targetProduct = products.find((p: any) => p.name.toLowerCase().includes("float"));
+      }
+
+      if (!targetProduct) {
+        // Fallback: match by catalog product name
+        const sorted = [...products].sort((a: any, b: any) => b.name.length - a.name.length);
+        for (const p of sorted) {
+          const pName = p.name.toLowerCase();
+          const baseName = pName.split("(")[0].trim();
+          if (t.includes(pName) || (baseName.length >= 5 && t.includes(baseName))) {
+            targetProduct = p;
+            break;
+          }
+        }
+      }
+
+      if (targetProduct && targetProduct.images && Array.isArray(targetProduct.images) && targetProduct.images.length > 0) {
+        imageUrls = [...targetProduct.images];
       }
     }
 
