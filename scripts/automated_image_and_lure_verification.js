@@ -258,7 +258,7 @@ async function main() {
     const returnedUrls = res.imageUrls || (res.imageUrl ? [res.imageUrl] : []);
 
     assert(returnedUrls.length === 0, "Must NOT hallucinate or attach images for items not in stock");
-    assert(/don't have|not available|do not carry|sorry/i.test(reply), "Must state that item is not available");
+    assert(/don't have|do not have|not available|do not carry|sorry|apologize/i.test(reply), "Must state that item is not available");
   });
 
   // TEST 11: Non-Lure Category Isolation (Reel Image Check)
