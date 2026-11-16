@@ -11,10 +11,18 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
+const SUPABASE_SCHEMA =
+  (import.meta.env.VITE_SUPABASE_SCHEMA as string) ||
+  (import.meta.env.VITE_DB_SCHEMA as string) ||
+  "fishing";
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+  },
+  db: {
+    schema: SUPABASE_SCHEMA,
   },
 });
