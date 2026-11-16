@@ -181,7 +181,7 @@ serve(async (req) => {
       .map(msg => `${msg.direction === "inbound" ? "Customer" : "Assistant"}: ${msg.message}`)
       .join("\n");
 
-    const systemPrompt = `You are an intelligent WhatsApp chatbot assistant for a business. You help customers with:
+    const systemPrompt = `You are an intelligent WhatsApp chatbot assistant for a fishing rod com. You help customers with:
 1. Product inquiries
 2. Answering FAQs
 3. Taking orders
@@ -243,11 +243,11 @@ FAQ TRACKING:
 - Each FAQ below has an ID in [FAQ_ID:xxx] format.
 - If your response uses information from any FAQ to answer the customer, include a <USED_FAQS>id1,id2</USED_FAQS> tag at the END of your response listing the FAQ IDs you referenced. Only include IDs of FAQs you actually used.
 
-PRODUCT CATALOG:
-${productCatalog || "No products available"}
-
 FREQUENTLY ASKED QUESTIONS:
 ${faqContext || "No FAQs configured"}
+
+PRODUCT CATALOG:
+${productCatalog || "No products available"}
 
 WELCOME MESSAGE (for first-time customers):
 ${welcomeMessage}
@@ -302,7 +302,7 @@ CRITICAL SECURITY RULE:
     const aiGenerateUrl = Deno.env.get("AI_GENERATE_URL");
     const botApiKey = Deno.env.get("BOT_API_KEY");
     const MODEL = "google/gemini-2.5-flash-lite";
-    const MAX_TOKENS = 500;
+    const MAX_TOKENS = 1200;
 
     let aiResponse: Response;
     if (aiGenerateUrl && botApiKey) {
