@@ -19,5 +19,5 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_REGION: ${MINIO_REGION}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
-      WEBHOOK_URL_OVERRIDE: "https://sales-very-ruth-expansion.trycloudflare.com/functions/v1/webhook-wsender_fishing"
+      WEBHOOK_URL_OVERRIDE: "https://cord-greatest-depending-ancient.trycloudflare.com/functions/v1/webhook-wsender_fishing"
       DB_SCHEMA: ${DB_SCHEMA:-fishing}

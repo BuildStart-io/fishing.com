@@ -120,6 +120,14 @@ serve(async (req) => {
     const paymentInfo = settings.find(s => s.key === "payment_info")?.value || {};
     const deliverySettings = settings.find(s => s.key === "delivery_settings")?.value || {};
     const freeDeliveryThreshold = deliverySettings.free_delivery_threshold || 0;
+    const staffPhoneSetting = settings.find(s => s.key === "staff_phone_numbers")?.value;
+    const rawStaffNumbers: { name?: string; phone: string }[] = Array.isArray(staffPhoneSetting)
+      ? staffPhoneSetting
+      : (staffPhoneSetting?.phone_numbers || staffPhoneSetting?.numbers || []);
+    const staffContactsList = rawStaffNumbers
+      .filter((s: any) => s && s.phone && String(s.phone).trim())
+      .map((s: any) => `- ${s.name ? `${s.name}: ` : ""}${s.phone}`)
+      .join("\n");
 
     const productCatalog = products.map(p => {
       let line = `- ${p.name}: Base price LKR ${p.price} (${p.product_type})`;
@@ -157,12 +165,12 @@ serve(async (req) => {
       return line;
     }).join("\n");
 
-    // Build a map of product name → first image URL for sending images
-    const productImageMap: Record<string, string> = {};
+    // Build a map of product name → image URLs for fast media resolution
+    const productImageMap: Record<string, string[]> = {};
     const productVideoMap: Record<string, string> = {};
     for (const p of products) {
       if (p.images && Array.isArray(p.images) && p.images.length > 0) {
-        productImageMap[p.name.toLowerCase()] = p.images[0];
+        productImageMap[p.name.toLowerCase()] = p.images.filter((img: string) => typeof img === "string" && img.trim().length > 0);
       }
       if (p.video_url) {
         productVideoMap[p.name.toLowerCase()] = p.video_url;
@@ -193,7 +201,7 @@ IMPORTANT GUIDELINES:
 - Do NOT repeat information the customer already knows or that was already sent.
 - Get straight to the point. No lengthy greetings or unnecessary filler sentences.
 - Use emojis sparingly but effectively to highlight key info 🎯
-- FORMATTING: Do NOT use asterisks (*) for bold or any markdown formatting. Write plain text only. No *bold*, no **bold**, no _italic_. Just plain clean text.
+- FORMATTING: Write clean WhatsApp-friendly text. Do NOT use markdown headers (# or ##), markdown tables, or markdown links [text](url). Do NOT write markdown image syntax like ![alt](url) in your text.
 - MESSAGE STYLING: Format your messages beautifully for WhatsApp:
   - Use emojis as bullet points and section separators (🔹, ✅, 📦, 💳, 🏦, 💰, 📧, 🚚, etc.)
   - When listing multiple items (like payment accounts), separate each with a clear emoji prefix and line breaks
@@ -231,6 +239,10 @@ ${(() => {
       })()}
 - STRICT DATA BOUNDARY: You must ONLY use the product catalog, FAQs, and payment information provided below. Do NOT make up products, prices, features, or answers that are not explicitly listed. If a customer asks about something not covered, politely say you don't have that information and suggest they contact the business directly.
 
+STAFF CONTACT NUMBERS:
+${staffContactsList || "No specific staff phone numbers configured. If asked for human support or a contact phone number, ask the customer to message here in WhatsApp and our staff will respond."}
+- When a customer asks for a phone number, support agent, or human assistance, provide ONLY the staff contact numbers listed above. Never invent or guess phone numbers.
+
 PRODUCT IMAGES:
 - When a customer asks about a specific product that has images, include ALL the image URLs in separate <IMAGE_URL>url</IMAGE_URL> tags at the END of your response. Include all images for the product to give them a complete view.
 - Only use image URLs from the product catalog below. Never make up image URLs.
@@ -255,9 +267,12 @@ ${welcomeMessage}
 When the customer completes an order, summarize the order details beautifully with emojis and confirm.
 
 CRITICAL ORDER INSTRUCTION:
-When you have collected ALL required order details and the customer confirms, you MUST include a JSON block in your response wrapped in <ORDER_JSON> tags like this:
-- For PHYSICAL products: <ORDER_JSON>{"customer_name":"...","customer_phone":"...","district":"...","customer_address":"...","order_items":[{"name":"...","price":...,"quantity":...,"product_type":"physical"}],"payment_method":"cod or bank_transfer","total_amount":...}</ORDER_JSON>
-- For DIGITAL products: <ORDER_JSON>{"customer_name":"...","customer_phone":"...","customer_email":"...","customer_address":null,"order_items":[{"name":"...","price":...,"quantity":...,"product_type":"digital"}],"payment_method":"bank_transfer","total_amount":...}</ORDER_JSON>
+- When a customer provides their ordering information (name, address, phone, etc.) or confirms an order, summarize their order details beautifully with emojis and you MUST include a JSON block wrapped in <ORDER_JSON> tags at the very END of your message.
+- MANDATORY IN ALL CASES: Even for short confirmation replies (e.g. when the customer replies "COD", "Yes", or "Confirm"), or when replying in Sinhala or Tamil, you MUST ALWAYS append the <ORDER_JSON> tag at the end. Never omit it.
+- Format for PHYSICAL products:
+<ORDER_JSON>{"customer_name":"...","customer_phone":"...","district":"...","customer_address":"...","order_items":[{"name":"...","price":...,"quantity":...,"product_type":"physical"}],"payment_method":"cod or bank_transfer","total_amount":...}</ORDER_JSON>
+- Format for DIGITAL products:
+<ORDER_JSON>{"customer_name":"...","customer_phone":"...","customer_email":"...","customer_address":null,"order_items":[{"name":"...","price":...,"quantity":...,"product_type":"digital"}],"payment_method":"bank_transfer","total_amount":...}</ORDER_JSON>
 Include this JSON block at the END of your confirmation message. The customer won't see the JSON tags.
 
 CRITICAL SECURITY RULE:
@@ -380,14 +395,170 @@ CRITICAL SECURITY RULE:
 
     // Check if the AI response contains order JSON
     let orderCreated = false;
-    const orderJsonMatches = [...responseText.matchAll(/<ORDER_JSON>([\s\S]*?)<\/ORDER_JSON>/g)];
+    let orderJsonMatches = [...responseText.matchAll(/<ORDER_JSON>([\s\S]*?)<\/ORDER_JSON>/g)];
+
+    // Fallback 1: Code fence or raw JSON block
+    if (orderJsonMatches.length === 0) {
+      const fenceMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?"(?:customer_name|order_items|products|items)"[\s\S]*?\})\s*```/);
+      if (fenceMatch) {
+        orderJsonMatches = [fenceMatch];
+      }
+    }
+
+    // Fallback 2: Confirmation text extraction if AI omitted tags completely
+    if (orderJsonMatches.length === 0) {
+      const isPendingPayment = /please\s+(?:confirm|select|choose|provide|let\s+me\s+know)\s+(?:your\s+)?(?:preferred\s+)?payment|select\s+your\s+payment\s+method|how\s+would\s+you\s+like\s+to\s+pay|choice\s*of\s*payment/i.test(responseText);
+      const isConfirmation =
+        !isPendingPayment && (
+          /\b(?:order\s+(?:is\s+|has\s+been\s+|was\s+)?(?:confirmed|placed|scheduled|received)|order\s+confirmed|confirmed\b|order\s+placed|ඇණවුම\s*(?:තහවුරු|ලැබුණා|භාරගත්තා)|ஆர்டர்\s*(?:உறுதிப்படுத்தப்பட்டது|பதிவு))/i.test(responseText) ||
+          (/(?:📦|🛒).*(?:💰|💵).*(?:👤|📍|📞)/s.test(responseText) && /(?:LKR|Rs\.?)\s*[0-9,]+/i.test(responseText))
+        );
+      if (isConfirmation) {
+        // Exclude business support and configured staff phone numbers from text
+        const cleanSupport = (text: string) => {
+          let cleaned = text.replace(/(?:\+?94\s*|0)?77[\s.-]*123[\s.-]*4567/g, "");
+          for (const s of rawStaffNumbers) {
+            if (s?.phone) {
+              const digits = String(s.phone).replace(/\D/g, "");
+              if (digits.length >= 7) {
+                cleaned = cleaned.replace(new RegExp(`(?:\\+?94\\s*|0)?${digits.slice(-9)}`, "g"), "");
+              }
+            }
+          }
+          return cleaned;
+        };
+        const historyText = conversationHistory ? (conversationHistory as ConversationMessage[]).slice(-4).map(m => m.message).join("\n") : "";
+        const fullText = cleanSupport(`${historyText}\n${trimmedMessage}\n${responseText}`);
+        const customerText = cleanSupport(`${trimmedMessage}\n${historyText}`);
+
+        const amountMatch =
+          responseText.match(/(?:Total(?:\s*Amount)?|මුළුத்\s*தொகை|மொத்த\s*(?:தொகை|விலை)?|மொத்தம்|එකතුව|මුළු\s*(?:ගණන|මුදල))[\s:*]+(?:LKR|Rs\.?)?[\s:*]+([0-9,]+(?:\.[0-9]{2})?)/i) ||
+          responseText.match(/(?:விலை|මිල|Price)[\s:*]+(?:LKR|Rs\.?)?[\s:*]+([0-9,]+(?:\.[0-9]{2})?)/i) ||
+          fullText.match(/(?:Total|Total Amount|මුදල|එකතුව)[\s:*]+(?:LKR|Rs\.?)?[\s:*]+([0-9,]+(?:\.[0-9]{2})?)/i) ||
+          fullText.match(/(?:LKR|Rs\.?)[\s:*]+([0-9,]+(?:\.[0-9]{2})?)/i);
+
+        const phoneMatch = customerText.match(/(?:(?:\+?94|0)\s*)?7(?:[\s.-]*\d){8}\b/) ||
+          customerText.match(/\b0\d{9}\b/) ||
+          fullText.match(/(?:(?:\+?94|0)\s*)?7(?:[\s.-]*\d){8}\b/);
+        const extractedPhone = phoneMatch ? ("0" + phoneMatch[0].replace(/\D/g, "").slice(-9)) : phoneNumber;
+
+        if (amountMatch) {
+          const extractedAmount = parseFloat(amountMatch[1].replace(/,/g, "")) || 0;
+          if (extractedAmount > 0) {
+            const addrMatch = responseText.match(/(?:(?:Shipping\s*|Delivery\s*)?Address|will\s+be\s+delivered\s+to|ලිපිනය|முகவரி)[\s:*]+([^\n\r*.]+)/i) ||
+              fullText.match(/(?:(?:Shipping\s*|Delivery\s*)?Address|will\s+be\s+delivered\s+to|ලිපිනය|முகவரி)[\s:*]+([^\n\r*.]+)/i) ||
+              customerText.match(/(?:ලිපිනය|Address|haus|ampara|colombo|kandy|batticaloa|[a-zA-Z0-9\s,.-]{15,})/i);
+            let extractedAddress: string | null = null;
+            if (addrMatch) {
+              let cand = (addrMatch[1] || addrMatch[0]).replace(/^(?:(?:🔹\s*)?ලිපිනය|(?:🔹\s*)?(?:Shipping\s*|Delivery\s*)?Address|(?:🔹\s*)?முகவரி)[\s:*]+/i, "").replace(/\*/g, "").trim();
+              cand = cand.replace(/\s+(?:within\s+\d+.*|via\s+(?:cash|cod|bank).*)$/i, "").trim();
+              if (cand && !/payment\s*method|district\s*and|full\s*address/i.test(cand)) {
+                extractedAddress = cand;
+              }
+            }
+
+            let extractedName = (senderName && senderName.toLowerCase() !== "customer") ? senderName : "Customer";
+            const greetingMatch = responseText.match(/(?:Thank\s*you(?:\s*for\s*(?:your\s*)?(?:order|purchase))?[,\s]+|Order\s*confirmed\s+for\s+|ස්තූතියි[,\s]+|நன்றி[,\s]+)(?:\*\*)?([A-Za-z]{2,20})(?:\*\*)?(?:!|\.|\s|,)/i) ||
+              fullText.match(/(?:Thank\s*you(?:\s*for\s*(?:your\s*)?(?:order|purchase))?[,\s]+|Order\s*confirmed\s+for\s+|ස්තූතියි[,\s]+|நன்றி[,\s]+)(?:\*\*)?([A-Za-z]{2,20})(?:\*\*)?(?:!|\.|\s|,)/i);
+            const nameMatch = responseText.match(/(?:(?:🔹\s*)?Name|නම|பெயர்)[\s:*]+([^\n\r*]+)/i) ||
+              fullText.match(/(?:(?:🔹\s*)?Name|නම|பெயர்)[\s:*]+([^\n\r*]+)/i);
+            
+            if (greetingMatch && !/^(?:customer|account|not\s*configured|bank|for|your|order|purchase|cash|cod|delivery)$/i.test(greetingMatch[1].trim())) {
+              extractedName = greetingMatch[1].trim();
+            } else if (nameMatch) {
+              const cand = nameMatch[1].replace(/^[^\w\s]+/, "").replace(/\*/g, "").trim();
+              if (cand && cand.length <= 25 && !/not\s*configured|bank|phone\s*number|full\s*name/i.test(cand)) {
+                extractedName = cand;
+              }
+            }
+
+            // Match against product catalog
+            let extractedProduct = "Fishing Gear Order";
+            for (const p of products) {
+              const pClean = p.name.replace(/\(.*?\)/g, "").trim();
+              if (pClean && new RegExp(pClean.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"), "i").test(fullText)) {
+                extractedProduct = p.name;
+                break;
+              }
+            }
+            if (extractedProduct === "Fishing Gear Order") {
+              const prodMatch = responseText.match(/(?:(?:🔹\s*)?Item|(?:🔹\s*)?Product)[\s:*]+([^\n\r*]+)/i) ||
+                fullText.match(/(?:(?:🔹\s*)?Item|(?:🔹\s*)?Product)[\s:*]+([^\n\r*]+)/i);
+              if (prodMatch) extractedProduct = prodMatch[1].replace(/^[^\w\s]+/, "").replace(/\*/g, "").trim();
+            }
+
+            const knownDistricts = ["Batticaloa", "Colombo", "Gampaha", "Kalutara", "Kandy", "Matale", "Nuwara Eliya", "Galle", "Matara", "Hambantota", "Jaffna", "Kilinochchi", "Mannar", "Vavuniya", "Mullaitivu", "Ampara", "Trincomalee", "Kurunegala", "Puttalam", "Anuradhapura", "Polonnaruwa", "Badulla", "Monaragala", "Ratnapura", "Kegalle"];
+            let extractedDistrict = null;
+            for (const d of knownDistricts) {
+              if (new RegExp(`\\b${d}\\b`, "i").test(fullText)) {
+                extractedDistrict = d;
+                break;
+              }
+            }
+
+            let extractedPayment = "cod";
+            if (/\b(?:bank(?:\s*transfer)?|බැංකු|வங்கி)\b/i.test(trimmedMessage)) {
+              extractedPayment = "bank_transfer";
+            } else if (/\b(?:cod|cash\s*on\s*delivery)\b/i.test(trimmedMessage)) {
+              extractedPayment = "cod";
+            } else if (/\b(?:bank(?:\s*transfer)?|බැංකු|வங்கி)\b/i.test(responseText)) {
+              extractedPayment = "bank_transfer";
+            }
+
+            const synthetic = {
+              customer_name: extractedName,
+              customer_phone: extractedPhone,
+              customer_address: extractedAddress,
+              district: extractedDistrict,
+              payment_method: extractedPayment,
+              total_amount: extractedAmount,
+              order_items: [{ name: extractedProduct, price: extractedAmount, quantity: 1, product_type: "physical" }],
+            };
+            orderJsonMatches = [[JSON.stringify(synthetic), JSON.stringify(synthetic)]];
+          }
+        }
+      }
+    }
+
     for (const orderJsonMatch of orderJsonMatches) {
       if (ordersLimitReached) {
         console.log(`Orders limit reached for user ${userId}: ${ordersCount}/${ordersLimit}`);
       } else {
         try {
-          const orderData = JSON.parse(orderJsonMatch[1]);
+          let rawJson = orderJsonMatch[1].trim();
+          if (rawJson.startsWith("```")) {
+            rawJson = rawJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+          }
+          const orderData = JSON.parse(rawJson);
           console.log("Saving order to database:", JSON.stringify(orderData));
+
+          const customerPhone = orderData.customer_phone || orderData.phone || orderData.customerPhone || phoneNumber;
+          const cleanCustomerPhone = customerPhone ? String(customerPhone).replace(/\D/g, "") : phoneNumber;
+          const customerName = orderData.customer_name || orderData.name || orderData.customerName || senderName || "Customer";
+          const customerAddress = orderData.customer_address || orderData.delivery_address || orderData.shipping_address || orderData.address || null;
+          const district = orderData.district || orderData.district_city || orderData.city || null;
+          const paymentMethod = /bank/i.test(orderData.payment_method || "") ? "bank_transfer" : "cod";
+
+          const rawItems = orderData.order_items || orderData.items || orderData.products || [];
+          const orderItems = Array.isArray(rawItems) ? rawItems.map((it: any) => ({
+            name: it.name || it.product_name || it.title || "Product",
+            price: parseFloat(it.price || it.base_price || it.unit_price || 0) || 0,
+            quantity: parseInt(it.quantity || it.qty || 1) || 1,
+            product_type: it.product_type || "physical",
+          })) : [];
+
+          let totalAmount = parseFloat(orderData.total_amount || orderData.total || orderData.totalPrice || 0) || 0;
+          if (totalAmount === 0 && orderItems.length > 0) {
+            totalAmount = orderItems.reduce((acc: number, it: any) => acc + (it.price * it.quantity), 0);
+            const deliveryFee = parseFloat(orderData.delivery_fee || orderData.delivery_price || (rawItems[0]?.delivery_fee) || 0) || 0;
+            totalAmount += deliveryFee;
+          }
+          if (totalAmount === 0) {
+            const amtMatch =
+              responseText.match(/(?:Total(?:\s*Amount)?|முழுத்\s*தொகை|மொத்த\s*(?:தொகை|விலை)?|மொத்தம்|එකතුව|මුළු\s*(?:ගණන|මුදල))[\s:*]+(?:LKR|Rs\.?)?[\s:*]+([0-9,]+(?:\.[0-9]{2})?)/i) ||
+              responseText.match(/(?:LKR|Rs\.?)[\s:*]+([0-9,]+(?:\.[0-9]{2})?)/i);
+            if (amtMatch) totalAmount = parseFloat(amtMatch[1].replace(/,/g, "")) || 0;
+          }
 
           // Deduplication: check if a similar order was created in the last 5 minutes
           const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -395,24 +566,25 @@ CRITICAL SECURITY RULE:
             .from("orders")
             .select("id")
             .eq("user_id", userId)
-            .eq("customer_phone", orderData.customer_phone || phoneNumber)
-            .eq("total_amount", orderData.total_amount || 0)
+            .eq("customer_phone", cleanCustomerPhone)
+            .eq("total_amount", totalAmount)
             .gte("created_at", fiveMinAgo);
 
           if (recentOrders && recentOrders.length > 0) {
             console.log("Duplicate order detected, skipping creation. Existing:", recentOrders[0].id);
+            orderCreated = true;
           } else {
             const { data: orderResult, error: orderError } = await supabase
               .from("orders")
               .insert({
-                customer_name: orderData.customer_name,
-                customer_phone: orderData.customer_phone || phoneNumber,
+                customer_name: customerName,
+                customer_phone: cleanCustomerPhone,
                 whatsapp_phone: phoneNumber,
-                district: orderData.district || null,
-                customer_address: orderData.customer_address || null,
-                order_items: orderData.order_items || [],
-                payment_method: orderData.payment_method || "cod",
-                total_amount: orderData.total_amount || 0,
+                district: district,
+                customer_address: customerAddress,
+                order_items: orderItems,
+                payment_method: paymentMethod,
+                total_amount: totalAmount,
                 special_instructions: orderData.customer_email ? `Email: ${orderData.customer_email}` : null,
                 status: "pending",
                 user_id: userId,
@@ -528,11 +700,82 @@ CRITICAL SECURITY RULE:
 
     // Extract image URLs if present
     const imageUrlMatches = Array.from(responseText.matchAll(/<IMAGE_URL>([\s\S]*?)<\/IMAGE_URL>/g));
-    const imageUrls = imageUrlMatches.map(m => m[1].trim());
+    let imageUrls = imageUrlMatches.map(m => m[1].trim()).filter(Boolean);
+
+    // Fallback 1: Extract markdown image URLs or bare storage URLs if model emitted them without <IMAGE_URL>
+    if (imageUrls.length === 0) {
+      const mdMatches = Array.from(responseText.matchAll(/!\[.*?\]\((https?:\/\/[^\s\)]+)\)/g));
+      for (const m of mdMatches) {
+        const u = m[1]?.trim();
+        if (u && !imageUrls.includes(u)) imageUrls.push(u);
+      }
+      const bareImgMatches = Array.from(responseText.matchAll(/(https?:\/\/[^\s\)]+?\.(?:png|jpe?g|webp)(?:\?[^\s\)]*)?)/gi));
+      for (const m of bareImgMatches) {
+        const u = m[1]?.trim();
+        if (u && !imageUrls.includes(u)) imageUrls.push(u);
+      }
+    }
+
+    // Fallback 2: Check if customer asked for photos or AI mentioned photos and match catalog
+    const hasPhotoIntent = /\b(images?|photos?|pics?|pictures?|දෙන්න|ෆොටෝ|පින්තූර|බලන්න|එවන්න|புகைப்படங்கள்|படங்கள்|அனுப்பு)\b/i.test(trimmedMessage + " " + responseText);
+    if (imageUrls.length === 0 && hasPhotoIntent) {
+      const recentHistoryText = (conversationHistory as ConversationMessage[])
+        .slice(-3)
+        .map(m => m.message)
+        .join(" ");
+      const searchContext = (trimmedMessage + " " + responseText + " " + recentHistoryText).toLowerCase();
+
+      // First check exact product name matches
+      for (const [prodName, imgs] of Object.entries(productImageMap)) {
+        if (searchContext.includes(prodName)) {
+          for (const img of imgs) {
+            if (!imageUrls.includes(img)) imageUrls.push(img);
+          }
+          if (imageUrls.length >= 2) break;
+        }
+      }
+
+      // If still no images, try domain-specific fishing keywords
+      if (imageUrls.length === 0) {
+        for (const [prodName, imgs] of Object.entries(productImageMap)) {
+          const isMatch = (prodName.includes("kithul") && searchContext.includes("kithul")) ||
+                          (prodName.includes("cable") && (searchContext.includes("cable") || searchContext.includes("wire leader"))) ||
+                          (prodName.includes("popper frog") && (searchContext.includes("frog") || searchContext.includes("popper"))) ||
+                          (prodName.includes("radium") && (searchContext.includes("radium") || searchContext.includes("luminous"))) ||
+                          (prodName.includes("reel") && searchContext.includes("reel")) ||
+                          (prodName.includes("rod") && searchContext.includes("rod")) ||
+                          (prodName.includes("lure") && searchContext.includes("lure")) ||
+                          (prodName.includes("float") && searchContext.includes("float"));
+          if (isMatch) {
+            for (const img of imgs) {
+              if (!imageUrls.includes(img)) imageUrls.push(img);
+            }
+            if (imageUrls.length >= 2) break;
+          }
+        }
+      }
+    }
+
     const imageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
+
     // Extract video URL if present
     const videoUrlMatch = responseText.match(/<VIDEO_URL>([\s\S]*?)<\/VIDEO_URL>/);
-    const videoUrl = videoUrlMatch ? videoUrlMatch[1].trim() : null;
+    let videoUrl = videoUrlMatch ? videoUrlMatch[1].trim() : null;
+
+    // Fallback for video if user asks for video
+    if (!videoUrl && /\b(videos?|vids?|වීඩියෝ|வீடியோ)\b/i.test(trimmedMessage + " " + responseText)) {
+      const recentHistoryText = (conversationHistory as ConversationMessage[])
+        .slice(-3)
+        .map(m => m.message)
+        .join(" ");
+      const searchContext = (trimmedMessage + " " + responseText + " " + recentHistoryText).toLowerCase();
+      for (const [prodName, vUrl] of Object.entries(productVideoMap)) {
+        if (vUrl && (searchContext.includes(prodName) || (prodName.includes("kithul") && searchContext.includes("kithul")) || (prodName.includes("rod") && searchContext.includes("rod")))) {
+          videoUrl = vUrl;
+          break;
+        }
+      }
+    }
 
     // Aggressively strip any JSON or technical markup from the response
     let cleanResponse = responseText;
@@ -550,6 +793,13 @@ CRITICAL SECURITY RULE:
     cleanResponse = cleanResponse.replace(/<\/?[A-Z_]+>/g, "");
     // Remove fenced code blocks (```json ... ``` or ``` ... ```)
     cleanResponse = cleanResponse.replace(/```[\s\S]*?```/g, "");
+    // Remove markdown image syntax and markdown image links
+    cleanResponse = cleanResponse.replace(/!\[.*?\]\([^\)]+\)/g, "");
+    cleanResponse = cleanResponse.replace(/\[(?:View\s*)?Images?[^\]]*\]\(?[^\)]*\)?/gi, "");
+    // Strip image URLs so raw links don't leak into message text
+    for (const u of imageUrls) {
+      cleanResponse = cleanResponse.split(u).join("");
+    }
     // Remove any JSON object that looks like order data (greedy match for nested objects)
     cleanResponse = cleanResponse.replace(/\{[^{}]*"customer_name"[^}]*\}/g, "");
     cleanResponse = cleanResponse.replace(/\{[^{}]*"customername"[^}]*\}/g, ""); // catch typos from model
@@ -564,7 +814,25 @@ CRITICAL SECURITY RULE:
     cleanResponse = cleanResponse.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "");
     // Remove [FAQ_ID:...] references that may leak into response
     cleanResponse = cleanResponse.replace(/\[FAQ_ID:[^\]]*\]/g, "");
-    // Clean up leftover whitespace
+
+    // WhatsApp Markdown Filtering & Cleanup
+    // Convert Markdown headers (#, ##, ###) to WhatsApp bold (*text*)
+    cleanResponse = cleanResponse.replace(/^#{1,6}\s*(.+)$/gm, "*$1*");
+    // Convert standard Markdown bold (**text**) to WhatsApp bold (*text*)
+    cleanResponse = cleanResponse.replace(/\*\*([^*\n]+)\*\*/g, "*$1*");
+    // Convert standard Markdown strikethrough (~~text~~) to WhatsApp strikethrough (~text~)
+    cleanResponse = cleanResponse.replace(/~~([^~\n]+)~~/g, "~$1~");
+    // Convert Markdown links [label](url) to readable WhatsApp format
+    cleanResponse = cleanResponse.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g, "$1: $2");
+    // Remove Markdown table divider lines (| --- | --- |)
+    cleanResponse = cleanResponse.replace(/^\s*\|?(?:\s*:?-+:?\s*\|)+\s*$/gm, "");
+    // Clean up empty bullets and orphan markers left after stripping tags/links
+    cleanResponse = cleanResponse.replace(/(?:^\s*[-*•]\s*[-*•]?\s*$\n?)+/gm, "");
+    // Remove empty parentheses/brackets left over from stripped links/images
+    cleanResponse = cleanResponse.replace(/\(\s*\)/g, "");
+    cleanResponse = cleanResponse.replace(/\[\s*\]/g, "");
+    // Clean up trailing whitespace on lines and excessive newlines
+    cleanResponse = cleanResponse.split("\n").map(l => l.trimEnd()).join("\n");
     cleanResponse = cleanResponse.replace(/\n{3,}/g, "\n\n").trim();
 
     // Log AI usage independently of conversations
