@@ -37,7 +37,7 @@ serve(async (req) => {
 
     // Fetch products, FAQs, settings, profile, and platform limits
     const [productsRes, faqsRes, settingsRes, profileRes, platformLimitsRes] = await Promise.all([
-      supabase.from("products").select("*").eq("is_active", true).eq("user_id", userId),
+      supabase.from("products").select("*").eq("is_active", true).eq("user_id", userId).order("name", { ascending: true }),
       supabase.from("faqs").select("*, products(name)").eq("is_active", true).eq("user_id", userId),
       supabase.from("settings").select("key, value").eq("user_id", userId),
       supabase.from("profiles").select("plan_tier, billing_cycle_start, is_paused, addon_contacts, addon_orders").eq("user_id", userId).single(),
@@ -238,6 +238,7 @@ ${(() => {
         return `  Bank: ${paymentInfo.bank_name || "Not configured"}, Account: ${paymentInfo.account_number || "Not configured"}, Name: ${paymentInfo.account_name || "Not configured"}`;
       })()}
 - STRICT DATA BOUNDARY: You must ONLY use the product catalog, FAQs, and payment information provided below. Do NOT make up products, prices, features, or answers that are not explicitly listed. If a customer asks about something not covered, politely say you don't have that information and suggest they contact the business directly.
+- THOROUGH CATALOG SEARCH: When a customer asks about a product, brand, search the ENTIRE catalog thoroughly before answering. many products are sold individually and also included in sets
 
 STAFF CONTACT NUMBERS:
 ${staffContactsList || "No specific staff phone numbers configured. If asked for human support or a contact phone number, ask the customer to message here in WhatsApp and our staff will respond."}
@@ -462,7 +463,7 @@ CRITICAL SECURITY RULE:
               fullText.match(/(?:Thank\s*you(?:\s*for\s*(?:your\s*)?(?:order|purchase))?[,\s]+|Order\s*confirmed\s+for\s+|ස්තූතියි[,\s]+|நன்றி[,\s]+)(?:\*\*)?([A-Za-z]{2,20})(?:\*\*)?(?:!|\.|\s|,)/i);
             const nameMatch = responseText.match(/(?:(?:🔹\s*)?Name|නම|பெயர்)[\s:*]+([^\n\r*]+)/i) ||
               fullText.match(/(?:(?:🔹\s*)?Name|නම|பெயர்)[\s:*]+([^\n\r*]+)/i);
-            
+
             if (greetingMatch && !/^(?:customer|account|not\s*configured|bank|for|your|order|purchase|cash|cod|delivery)$/i.test(greetingMatch[1].trim())) {
               extractedName = greetingMatch[1].trim();
             } else if (nameMatch) {
@@ -739,13 +740,13 @@ CRITICAL SECURITY RULE:
       if (imageUrls.length === 0) {
         for (const [prodName, imgs] of Object.entries(productImageMap)) {
           const isMatch = (prodName.includes("kithul") && searchContext.includes("kithul")) ||
-                          (prodName.includes("cable") && (searchContext.includes("cable") || searchContext.includes("wire leader"))) ||
-                          (prodName.includes("popper frog") && (searchContext.includes("frog") || searchContext.includes("popper"))) ||
-                          (prodName.includes("radium") && (searchContext.includes("radium") || searchContext.includes("luminous"))) ||
-                          (prodName.includes("reel") && searchContext.includes("reel")) ||
-                          (prodName.includes("rod") && searchContext.includes("rod")) ||
-                          (prodName.includes("lure") && searchContext.includes("lure")) ||
-                          (prodName.includes("float") && searchContext.includes("float"));
+            (prodName.includes("cable") && (searchContext.includes("cable") || searchContext.includes("wire leader"))) ||
+            (prodName.includes("popper frog") && (searchContext.includes("frog") || searchContext.includes("popper"))) ||
+            (prodName.includes("radium") && (searchContext.includes("radium") || searchContext.includes("luminous"))) ||
+            (prodName.includes("reel") && searchContext.includes("reel")) ||
+            (prodName.includes("rod") && searchContext.includes("rod")) ||
+            (prodName.includes("lure") && searchContext.includes("lure")) ||
+            (prodName.includes("float") && searchContext.includes("float"));
           if (isMatch) {
             for (const img of imgs) {
               if (!imageUrls.includes(img)) imageUrls.push(img);
